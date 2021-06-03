@@ -7,14 +7,17 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/prapawit201/GoFirebase/models"
+	"reflect" //check type like typeOf
+	"strconv"
+	"strings"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/mitchellh/mapstructure"
+	"github.com/prapawit201/GoFirebase/models"
+	"github.com/twinj/uuid"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
@@ -77,6 +80,7 @@ func respondWithError(w http.ResponseWriter, code int, message string) {
 func (route *App) initializeRoutes() {
 	route.Router.HandleFunc("/", route.Home).Methods("GET")
 	route.Router.HandleFunc("/{id}", route.FetchDataByIds).Methods("GET")
+	route.Router.HandleFunc("/create", route.CreateBook).Methods("POST")
 }
 
 func (route *App) Home(w http.ResponseWriter, r *http.Request) {
@@ -101,10 +105,14 @@ func (route *App) Home(w http.ResponseWriter, r *http.Request) {
 
 func (route *App) FetchDataByIds(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	paramId := params["id"]
-	BooksData := []models.Books{}
+	paramId, err := strconv.Atoi(params["id"])
 
-	iter := route.client.Collection("books").Where("name", "==", paramId).Documents(route.ctx)
+	if err != nil {
+		log.Fatalf("Failed to iterate: %v", err)
+	}
+	BooksData := []models.Books{}
+	fmt.Println(reflect.TypeOf(paramId))
+	iter := route.client.Collection("books").Where("id", "==", paramId).Documents(route.ctx)
 	for {
 		BookData := models.Books{}
 		doc, err := iter.Next()
@@ -116,7 +124,30 @@ func (route *App) FetchDataByIds(w http.ResponseWriter, r *http.Request) {
 		}
 		mapstructure.Decode(doc.Data(), &BookData)
 		BooksData = append(BooksData, BookData)
-
 	}
 	respondWithJSON(w, http.StatusOK, BooksData)
+}
+
+func (route *App) CreateBook(w http.ResponseWriter, r *http.Request) {
+	uid := uuid.NewV4()
+	splitID := strings.Split(uid.String(), "-")
+	id := splitID[0] + splitID[1] + splitID[2] + splitID[3] + splitID[4]
+
+	BookData := models.Books{}
+
+	Decoder := json.NewDecoder(r.Body)
+	err := Decoder.Decode(&BookData)
+
+	BookData.Id = id
+	fmt.Println(BookData)
+	if err != nil {
+		log.Printf("error: %s", err)
+	}
+
+	_, _, err = route.client.Collection("books").Add(route.ctx, BookData)
+	if err != nil {
+		log.Printf("An error has occurred: %s", err)
+	}
+
+	respondWithJSON(w, http.StatusCreated, "Create book success!")
 }
