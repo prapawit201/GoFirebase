@@ -76,6 +76,7 @@ func respondWithError(w http.ResponseWriter, code int, message string) {
 
 func (route *App) initializeRoutes() {
 	route.Router.HandleFunc("/", route.Home).Methods("GET")
+	route.Router.HandleFunc("/{id}", route.FetchDataByIds).Methods("GET")
 }
 
 func (route *App) Home(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +95,28 @@ func (route *App) Home(w http.ResponseWriter, r *http.Request) {
 
 		mapstructure.Decode(doc.Data(), &BookData)
 		BooksData = append(BooksData, BookData)
+	}
+	respondWithJSON(w, http.StatusOK, BooksData)
+}
+
+func (route *App) FetchDataByIds(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	paramId := params["id"]
+	BooksData := []models.Books{}
+
+	iter := route.client.Collection("books").Where("name", "==", paramId).Documents(route.ctx)
+	for {
+		BookData := models.Books{}
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Failed to iterate: %v", err)
+		}
+		mapstructure.Decode(doc.Data(), &BookData)
+		BooksData = append(BooksData, BookData)
+
 	}
 	respondWithJSON(w, http.StatusOK, BooksData)
 }
