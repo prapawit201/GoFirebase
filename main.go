@@ -67,6 +67,7 @@ func (route *App) Run() {
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/x-www-form-urlencoded")
 	w.WriteHeader(code)
 	w.Write(response)
 }
@@ -85,9 +86,26 @@ func (route *App) initializeRoutes() {
 }
 
 func (route *App) Home(w http.ResponseWriter, r *http.Request) {
-	BooksData := []models.Books{}
+	// BooksData := []models.Books{}
+	// iter := route.client.Collection("books").Documents(route.ctx)
+	// for {
+	// 	BookData := models.Books{}
+	// 	doc, err := iter.Next()
+	// 	if err == iterator.Done {
+	// 		break
+	// 	}
+	// 	if err != nil {
+	// 		respondWithJSON(w, http.StatusInternalServerError, "Something wrong, please try again.")
+	// 	}
+	// 	mapstructure.Decode(doc.Data(), &BookData)
+	// 	BooksData = append(BooksData, BookData)
+	// }
+	// respondWithJSON(w, http.StatusOK, BooksData)
 
+	// ----------------- Sol.2 : P. Hern's Link --------------------
+	fmt.Println("All Books in library : ")
 	iter := route.client.Collection("books").Documents(route.ctx)
+	result := []models.Books{}
 	for {
 		BookData := models.Books{}
 		doc, err := iter.Next()
@@ -95,37 +113,49 @@ func (route *App) Home(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
-			respondWithJSON(w, http.StatusInternalServerError, "Something wrong, please try again.")
+			respondWithJSON(w, http.StatusInternalServerError, err)
 		}
-
-		mapstructure.Decode(doc.Data(), &BookData)
-		BooksData = append(BooksData, BookData)
+		fmt.Println(doc.Data())
+		mapstructure.Decode(doc.Data(), &BookData) // เเยกออกจาก map มาใส่ใน result
+		result = append(result, BookData)
 	}
-	respondWithJSON(w, http.StatusOK, BooksData)
+	respondWithJSON(w, http.StatusOK, result)
+
 }
 
 func (route *App) FetchDataByIds(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 	paramsID := params["id"]
-	BooksData := []models.Books{}
+	// BooksData := []models.Books{}
+	// iter := route.client.Collection("books").Where("Id", "==", paramsID).Documents(route.ctx)
+	// for {
+	// 	BookData := models.Books{}
+	// 	doc, err := iter.Next()
+	// 	if err == iterator.Done {
+	// 		break
+	// 	}
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to iterate: %v", err)
+	// 	}
+	// 	mapstructure.Decode(doc.Data(), &BookData)
+	// 	BooksData = append(BooksData, BookData)
+	// }
 
+	// ----------------- Sol.2 : P. Hern's Link --------------------
+
+	fmt.Println("Serach Book in Library :" + paramsID)
 	iter := route.client.Collection("books").Where("Id", "==", paramsID).Documents(route.ctx)
 	for {
-		BookData := models.Books{}
 		doc, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-			log.Fatalf("Failed to iterate: %v", err)
+			respondWithJSON(w, http.StatusInternalServerError, err)
 		}
-
-		mapstructure.Decode(doc.Data(), &BookData)
-		BooksData = append(BooksData, BookData)
+		respondWithJSON(w, http.StatusOK, doc.Data())
 	}
-
-	respondWithJSON(w, http.StatusOK, BooksData[0])
 }
 
 func (route *App) CreateBook(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +169,7 @@ func (route *App) CreateBook(w http.ResponseWriter, r *http.Request) {
 	err := Decoder.Decode(&BookData)
 
 	BookData.Id = id
+	BookData.Status = true
 	fmt.Println(BookData)
 	if err != nil {
 		log.Printf("error: %s", err)
