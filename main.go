@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"reflect" //check type like typeOf
-	"strconv"
+	"os" //check type like typeOf
 	"strings"
 
 	"cloud.google.com/go/firestore"
@@ -81,6 +79,7 @@ func (route *App) initializeRoutes() {
 	route.Router.HandleFunc("/", route.Home).Methods("GET")
 	route.Router.HandleFunc("/{id}", route.FetchDataByIds).Methods("GET")
 	route.Router.HandleFunc("/create", route.CreateBook).Methods("POST")
+	route.Router.HandleFunc("/{id}", route.EditBookByID).Methods("PUT")
 }
 
 func (route *App) Home(w http.ResponseWriter, r *http.Request) {
@@ -104,15 +103,12 @@ func (route *App) Home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (route *App) FetchDataByIds(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	paramId, err := strconv.Atoi(params["id"])
 
-	if err != nil {
-		log.Fatalf("Failed to iterate: %v", err)
-	}
+	params := mux.Vars(r)
+	paramsID := params["id"]
 	BooksData := []models.Books{}
-	fmt.Println(reflect.TypeOf(paramId))
-	iter := route.client.Collection("books").Where("id", "==", paramId).Documents(route.ctx)
+
+	iter := route.client.Collection("books").Where("Id", "==", paramsID).Documents(route.ctx)
 	for {
 		BookData := models.Books{}
 		doc, err := iter.Next()
@@ -122,10 +118,12 @@ func (route *App) FetchDataByIds(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Fatalf("Failed to iterate: %v", err)
 		}
+
 		mapstructure.Decode(doc.Data(), &BookData)
 		BooksData = append(BooksData, BookData)
 	}
-	respondWithJSON(w, http.StatusOK, BooksData)
+
+	respondWithJSON(w, http.StatusOK, BooksData[0])
 }
 
 func (route *App) CreateBook(w http.ResponseWriter, r *http.Request) {
@@ -144,10 +142,47 @@ func (route *App) CreateBook(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error: %s", err)
 	}
 
+	// req, err := http.NewRequest(r.Method, r.url)
 	_, _, err = route.client.Collection("books").Add(route.ctx, BookData)
 	if err != nil {
 		log.Printf("An error has occurred: %s", err)
 	}
 
 	respondWithJSON(w, http.StatusCreated, "Create book success!")
+}
+func (route *App) EditBookByID(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	paramsID := params["id"]
+
+	BookData := models.Books{}
+
+	Decoder := json.NewDecoder(r.Body)
+	err := Decoder.Decode(&BookData)
+	if err != nil {
+		log.Printf("error: %s", err)
+	}
+
+	var docID string
+
+	BookData.Id = paramsID //เอาไว้ set ค่า id ให้เป็นแบบเดิมเพื่อที่จะได้ไม่เป็น null
+	iter := route.client.Collection("books").Where("Id", "==", paramsID).Documents(route.ctx)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Failed to iterate: %v", err)
+		}
+		docID = doc.Ref.ID
+	}
+
+	_, err = route.client.Collection("books").Doc(docID).Set(route.ctx, BookData)
+	if err != nil {
+
+		fmt.Println(BookData)
+		log.Printf("An error has occurred: %s", err)
+	}
+
+	respondWithJSON(w, http.StatusCreated, "Edit book success!")
 }
