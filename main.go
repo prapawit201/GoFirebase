@@ -80,6 +80,8 @@ func (route *App) initializeRoutes() {
 	route.Router.HandleFunc("/{id}", route.FetchDataByIds).Methods("GET")
 	route.Router.HandleFunc("/create", route.CreateBook).Methods("POST")
 	route.Router.HandleFunc("/{id}", route.EditBookByID).Methods("PUT")
+	route.Router.HandleFunc("/delete/{id}", route.DeleteBookByID).Methods("DELETE")
+
 }
 
 func (route *App) Home(w http.ResponseWriter, r *http.Request) {
@@ -185,4 +187,26 @@ func (route *App) EditBookByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusCreated, "Edit book success!")
+}
+
+func (route *App) DeleteBookByID(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	paramId := params["id"]
+	var docID string
+	iter := route.client.Collection("books").Where("Id", "==", paramId).Documents(route.ctx)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Failed to iterate: %v", err)
+		}
+		docID = doc.Ref.ID
+	}
+	_, err := route.client.Collection("books").Doc(docID).Delete(route.ctx)
+	if err != nil {
+		log.Printf("An error occurred %s", err)
+	}
+	respondWithJSON(w, http.StatusOK, "Delete book success")
 }
